@@ -6,7 +6,7 @@
 
 #define GAMEPAD_DEVICE_ID 0x2508
 
-constexpr char hid_device_name[] = "GP2040-CE Gamepad";
+constexpr char hid_device_name[] = "GP Gamepad";
 
 // This is a combination of a personnaly Wireshark dumped Xbone One HID Descriptor
 // and one I found online (that was slightly different, not sure if it matters)

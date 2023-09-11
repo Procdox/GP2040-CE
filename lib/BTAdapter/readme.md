@@ -43,12 +43,22 @@ To support connection to more modern devices that do not support (or are slow to
 
 ## HERE BE DRAGONS
 
-If you want to debug the actual bluetooth connection on Windows via Wireshark. Use a Bluetooth USB dongle. Internal chipset bluetooth can't be inspected by Wireshark on Windows.
-Wireshark capture USBPcap, with a filter along the lines of:
-(hci_usb || bthci_acl || btl2cap || btrfcomm || btspp || hci_h1 || hci_h4 || hci_mon || bluetooth || sm) && (!bthci_evt.bd_addr || bthci_evt.bd_addr == <BTStack Pico MAC address>)
+If you want to debug the actual bluetooth connection on Windows via Wireshark, you have two options.
+The better option: Use a USB dongle (a nice one, cheap ones are usually NOT the Bluetooth version they claim) and capture USBPcap in wireshark.
+Use a filter along the lines of:\
+```(hci_usb || bthci_acl || btl2cap || btrfcomm || btspp || hci_h1 || hci_h4 || hci_mon || bluetooth || sm)```\
 Some of these are redundant, but for me stuff would infrequently not appear unless the lowest protocol was in the filter set.
 
-Device Manager properties for the HID device can also offer info.
+The sort-of-works option: Download BTP (https://learn.microsoft.com/en-us/windows-hardware/drivers/bluetooth/testing-btp-setup-package) from microsoft and run\
+```C:\BTP\v1.9.0\x86\btvs.exe```\
+Sort-of-works because BTP needs to be restarted between each capture, EATS system resources, and cause random failures during pairing for LE.
+
+For either option, you can extend your filter with the following\
+```(!bthci_evt.bd_addr || bthci_evt.bd_addr == <BTStack Pico MAC address>)```\
+```!bthci_evt.le_meta_subevent || bthci_evt.le_meta_subevent != 0x0d```\
+To filter out non-pico or ad events respectively.
+
+If the device is connection but not functioning Device Manager properties for the HID device can also offer info.
 What I've seen: 
 - address space conflict: HID descriptor bit widths are wrong
 - Extra End collection: HID descriptor collection scopes are wrong

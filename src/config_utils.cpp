@@ -90,6 +90,8 @@ void ConfigUtils::initUnsetPropertiesWithDefaults(Config& config)
 
     INIT_UNSET_PROPERTY_STR(config, boardVersion, GP2040VERSION);
 
+    INIT_UNSET_PROPERTY_BYTES(config, btAddress, emptyByteArray);
+
     // gamepadOptions
     INIT_UNSET_PROPERTY(config.gamepadOptions, inputMode, DEFAULT_INPUT_MODE);
     INIT_UNSET_PROPERTY(config.gamepadOptions, dpadMode, DEFAULT_DPAD_MODE);

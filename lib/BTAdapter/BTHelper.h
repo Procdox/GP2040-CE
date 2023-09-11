@@ -94,10 +94,9 @@ void printEventType(uint8_t *packet) {
     case HCI_EVENT_VENDOR_SPECIFIC: printf("Type: HCI_EVENT_VENDOR_SPECIFIC\n"); break;
     
     case GAP_EVENT_SECURITY_LEVEL: printf("Type: GAP_EVENT_SECURITY_LEVEL\n"); break;
+    case GAP_EVENT_DEDICATED_BONDING_COMPLETED: printf("Type: GAP_EVENT_DEDICATED_BONDING_COMPLETED\n"); break;
     case GAP_EVENT_PAIRING_STARTED: printf("Type: GAP_EVENT_PAIRING_STARTED\n"); break;
     case GAP_EVENT_PAIRING_COMPLETE: printf("Type: GAP_EVENT_PAIRING_COMPLETE\n"); break;
-    
-
 
     case HCI_EVENT_LE_META: 
       switch(hci_event_le_meta_get_subevent_code(packet)){
@@ -169,7 +168,8 @@ void printEventType(uint8_t *packet) {
                     printf("Pairing failed, disconnected\n");
                     break;
                 case ERROR_CODE_AUTHENTICATION_FAILURE:
-                    printf("Pairing failed, authentication failure with reason = %u\n", sm_event_pairing_complete_get_reason(packet));
+                    // see "Pairing Failed Reasons" in pico-sdk/lib/btstack/src/bluetooth.h
+                    printf("Pairing failed, authentication failure with reason = %x\n", sm_event_pairing_complete_get_reason(packet));
                     break;
                 default:
                     break;

@@ -18,6 +18,9 @@
 #include <vector>
 #include <tuple>
 
+extern void btLoadAddress(uint8_t (&address)[6]);
+extern void btSaveAddress(uint8_t (&address)[6]);
+
 /*
 ########################################################################################################### 
   Packet Handler Callbacks
@@ -30,6 +33,7 @@
 
 static uint16_t hidCID = 0; // HID device ID handle from local HCI
 static uint8_t TDS_Data[] = {0x1,0x1}; // TDS opcode and org code, maybe needs 18 octet uuid service procedure section?
+static bd_addr_t lastAddress = {0,0,0,0,0,0};
 
 void handleHIDPacket(uint8_t packet_type, uint16_t channel, uint8_t * packet, uint16_t packet_size) {
   printEventType(packet);
@@ -48,6 +52,9 @@ void handleHIDPacket(uint8_t packet_type, uint16_t channel, uint8_t * packet, ui
       }
       
       hidCID = hid_subevent_connection_opened_get_hid_cid(packet);
+      hid_subevent_connection_opened_get_bd_addr(packet, lastAddress);
+      btSaveAddress(lastAddress);
+
       printf("HID Connected\n", status);
       break;
     case HID_SUBEVENT_CONNECTION_CLOSED:
@@ -60,14 +67,66 @@ void handleHIDPacket(uint8_t packet_type, uint16_t channel, uint8_t * packet, ui
   }
 }
 
+static bool isBLEConnected = false;
+static bool isEDRConnected = false;
+
+/// test @see btSaveAddress(uint8_t (&address)[6])
 void handleHCIPacket(uint8_t packet_type, uint16_t channel, uint8_t * packet, uint16_t packet_size) {
   printEventType(packet);
   switch (hci_event_packet_get_type(packet)) {
-    case HCI_EVENT_DISCONNECTION_COMPLETE: 
-      printf("Disconnected, reason: %x\n", hci_event_disconnection_complete_get_reason(packet));
-      hidCID = 0;
-      // gap_advertisements_enable(1);
+    case BTSTACK_EVENT_STATE:
+      if (btstack_event_state_get_state(packet) == HCI_STATE_WORKING) {
+        bool safe = false;
+        for(const auto& p : lastAddress){
+          if(p != 0x0) safe = true;
+        }
+        //if(safe) gap_dedicated_bonding(lastAddress, 0x1);
+      }
       break;
+    case HCI_EVENT_CONNECTION_COMPLETE:{
+        const auto connHandle = hci_event_connection_complete_get_connection_handle(packet);
+        printf("Connected. handle: %x\n", connHandle);
+
+        const hci_connection_t* conn = hci_connection_for_handle(connHandle);
+        const bool isBLE = conn->address_type <= BD_ADDR_TYPE_LE_RANDOM_IDENTITY;
+        const bool isEDR = !isBLE && conn->address_type != BD_ADDR_TYPE_UNKNOWN;
+        if(isBLE){
+          printf(isBLEConnected ? "-- BLE Second Connection!\n" : "-- BLE First Connection!\n");
+          isBLEConnected = true;
+        }
+        else if(isEDR) {
+          printf(isEDRConnected ? "-- EDR Second Connection!\n" : "-- EDR First Connection!\n");
+          isEDRConnected = true;
+        }
+
+      } break;
+    case HCI_EVENT_DISCONNECTION_COMPLETE: {
+        const auto connHandle = hci_event_disconnection_complete_get_connection_handle(packet);
+        const auto reason = hci_event_disconnection_complete_get_reason(packet); // see "BLUETOOTH_ERROR_CODE" in pico-sdk/lib/btstack/src/bluetooth.h
+        printf("Disconnected. reason: %x, handle: %x\n", reason, connHandle);
+
+        const hci_connection_t* conn = hci_connection_for_handle(connHandle);
+        const bool isBLE = conn->address_type <= BD_ADDR_TYPE_LE_RANDOM_IDENTITY;
+        const bool isEDR = !isBLE && conn->address_type != BD_ADDR_TYPE_UNKNOWN;
+        if(isBLE){
+          printf("-- BLE Disconnection!\n");
+          isBLEConnected = false;
+        }
+        else if(isEDR) {
+          printf("-- EDR Disconnection!\n");
+          isEDRConnected = false;
+          hidCID = 0;
+        }
+
+        // if we are no longer connected, re-enable BLE ads
+        if(!isBLEConnected && !isEDRConnected){
+          printf("-- Both disconnected, resetting...\n");
+          gap_advertisements_enable(1);
+        }
+        else{
+          printf(isBLEConnected ? "-- BLE Still Connected...\n" : "-- EDR Still Connected...\n");
+        }
+      } break;
     case HCI_EVENT_COMMAND_COMPLETE:
       printf("Command: %x %x\n", hci_event_command_complete_get_command_opcode(packet), hci_event_command_complete_get_return_parameters(packet));
       break;
@@ -92,7 +151,17 @@ void handleHCIPacket(uint8_t packet_type, uint16_t channel, uint8_t * packet, ui
         }
         
       }
-      
+    case HCI_EVENT_LE_META:
+      switch(hci_event_le_meta_get_subevent_code(packet)){
+        case HCI_SUBEVENT_LE_CONNECTION_COMPLETE: {
+          gap_discoverable_control(1);
+          printf(isBLEConnected ? "-- BLE Second Connection!\n" : "-- BLE First Connection!\n");
+          isBLEConnected = true;
+        }
+        break;
+      default:
+        break;
+      }
     default: break;
   }
 }
@@ -104,7 +173,6 @@ void handleSMPacket(uint8_t packet_type, uint16_t channel, uint8_t * packet, uin
     case SM_EVENT_JUST_WORKS_REQUEST: 
       printf("Just Works requested\n");
       sm_just_works_confirm(sm_event_just_works_request_get_handle(packet)); 
-      gap_discoverable_control(1);
       break;
     default: break;
   }
@@ -153,6 +221,18 @@ static btstack_packet_callback_registration_t smCallback;
 void setupClassic() {
   l2cap_init();
   sdp_init();
+
+  sm_key_t custom_er;
+  sm_key_t custom_ir;
+
+  int i;
+  for (i=0;i<16;i++){
+      custom_er[i] = 0x35 + i;
+      custom_ir[i] = 0x95 + i;
+  }
+
+  sm_set_ir(custom_ir);
+  sm_set_er(custom_er);
   sm_init();
   sm_set_io_capabilities(IO_CAPABILITY_NO_INPUT_NO_OUTPUT);
   sm_set_authentication_requirements(SM_AUTHREQ_BONDING | SM_AUTHREQ_SECURE_CONNECTION );
@@ -287,6 +367,8 @@ int btstack_main(int argc, const char * argv[]){
   // setup the L2CAP channel framework and footprint
   setupClassic();
   setupHandoff();
+
+  btLoadAddress(lastAddress);
 
   // actually turn on Bluetooth
   hci_power_control(HCI_POWER_ON);

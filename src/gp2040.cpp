@@ -146,6 +146,30 @@ void btTickGamepad(uint8_t (&reportBuffer)[17]) {
   gpContext->tick();
   Storage::getInstance().GetProcessedGamepad()->fillXInputBtReport(reportBuffer);
 }
+
+void btSaveAddress(uint8_t (&address)[6]) {
+  printf("Saving BT Address: ");
+  for(const auto& p : address) printf("%x", p);
+  printf("\n");
+  auto& config = Storage::getInstance().getConfig();
+  memcpy(config.btAddress.bytes, address, 6);
+  config.btAddress.size = 6;
+  config.has_btAddress = true;
+  Storage::getInstance().save();
+}
+
+void btLoadAddress(uint8_t (&address)[6]) {
+  auto& config = Storage::getInstance().getConfig();
+  if(config.has_btAddress && config.btAddress.size == 6){
+    printf("Loading BT Address: ");
+    for(const auto& p : address) printf("%x", p);
+    printf("\n");
+    memcpy(address, Storage::getInstance().getConfig().btAddress.bytes, 6);
+  }else{
+    printf("No BT Address in FLASH\n");
+    memset(address, 0x0, 6);
+  }
+}
 #endif
 
 void GP2040::tick() {

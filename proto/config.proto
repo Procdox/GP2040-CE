@@ -504,4 +504,5 @@ message Config
 	optional AddonOptions addonOptions = 9;
 	optional ForcedSetupOptions forcedSetupOptions = 10;
 	optional ProfileOptions profileOptions = 11;
+  optional bytes btAddress = 12 [(nanopb).max_size = 6];
 }

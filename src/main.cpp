@@ -11,6 +11,7 @@
 #include "gp2040aux.h"
 
 #include <cstdlib>
+#include <pico/flash.h>
 
 // Custom implementation of __gnu_cxx::__verbose_terminate_handler() to reduce binary size
 namespace __gnu_cxx {
@@ -22,6 +23,7 @@ void __verbose_terminate_handler()
 
 // Launch our second core with additional modules loaded in
 void core1() {
+  flash_safe_execute_core_init(); // tell the flash system we are using flash safe on core1
 	multicore_lockout_victim_init(); // block core 1
 
 	// Create GP2040 w/ Additional Modules for Core 1
